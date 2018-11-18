@@ -8,8 +8,8 @@ const bodyParser = require("body-Parser");
 const app = express();
 
 //Middleware
-app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({ extended; false}))
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
 //DB config
 //mongodb://<dbuser>:<dbpassword>@ds037688.mlab.com:37688/thomasjd
