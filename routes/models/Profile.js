@@ -9,15 +9,33 @@ const ProfileSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: "users"
   },
-  location: {
+  bio: {
     type: String
+  },
+  placesvisited: [
+    {
+      country: {
+        type: String
+      },
+      city: {
+        type: String
+      },
+      attraction: {
+        type: String
+      }
+    }
+  ],
+  location: {
+    type: String,
+    required: true
   },
   social: {
     network: {
       type: String
     },
     handle: {
-      type: String
+      type: String,
+      required: true
     }
   },
   date: {

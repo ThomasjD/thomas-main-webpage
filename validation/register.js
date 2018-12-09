@@ -19,7 +19,7 @@ module.exports = function validateRegisterInput(data) {
   data.email = !isEmpty(data.email) ? data.email : "";
   data.password = !isEmpty(data.password) ? data.password : "";
   data.password2 = !isEmpty(data.password2) ? data.password2 : "";
-
+  data.relationship = !isEmpty(data.relationship) ? data.relationship : "";
   if (!Validator.isLength(data.name, { min: 2, max: 30 })) {
     errors.name = "Name must be between 2 & 30 characters";
   }
@@ -62,6 +62,10 @@ module.exports = function validateRegisterInput(data) {
     errors.password2 = "Confirm Password field is required";
   }
 
+  //relationship
+  if (Validator.isEmpty(data.relationshi)) {
+    errors.relationship = "Please include relationship to site creator.";
+  }
   return {
     //errors: errors, shortened
     errors,

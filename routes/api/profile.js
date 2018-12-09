@@ -21,147 +21,249 @@ const User = require("../../models/User");
 router.get("/test", (req, res) => res.json({ msg: "Users Works" }));
 //res.json() similiar to res.send() which we used to serve text instead of json
 
-// @route  POST api/users/register
-// @desc   Tests users route
-// @access Public
-router.post("/register", (req, res) => {
-  //use mongoose to first find if email exist
+// @route   GET api/profile
+// @desc    Get current users profile
+// @access  Private
+router.get(
+  "/",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    const errors = {};
+    //only need slash bec this file is linked to api/profile from the server.js
+    //we want to get current users profile
+    //user schema contain an Id object
 
-  //validateRegisterInput is from register, which req will get passed into, to see whatever rules w/in register will pass
-  const { errors, isValid } = validateRegisterInput(req.body);
-  //include email name password in the body
-  //to check if there are errors, check to see if errors is valid(passed in parameter is false)
-  // Check Validation
-  if (!isValid) {
-    return res.status(400).json(errors); //send along the whole entire error's object
+    Profile.findOne({ user: req.user.id })
+      //go to user kw on profile schema, populate the name and avatar of this user
+      .populate("user", ["name", "avatar"]) //populate from users
+      .then(profile => {
+        if (!profile) {
+          errors.noprofile = "There is no profile for this user";
+          //404 is error for not found
+
+          return res.status(404).json(errors);
+          //now error sent as a response
+        }
+        //if profile is found
+        //.json sends 200 req response, & profile
+        res.json(profile);
+      })
+      .catch(err => res.status(404).json(err));
   }
-  User.findOne({ email: req.body.email }).then(user => {
-    if (user) {
-      //if user is true = it exist in db return this response
-      errors.emailExist = "Email already exists";
-      return res.status(400).json(errors);
-    } else {
-      const avatar = gravatar.url(req.body.email, {
-        s: "200", //size
-        r: "pg", //rating
-        d: "mm" //default (show an avatar w/ no photo 'generic' )
-      });
-      //if user not exist, create a newUser using the User model using data from the req as an object
-      const newUser = new User({
-        name: req.body.name,
-        email: req.body.email,
-        avatar, //shortened from avatar: avatar (ES6)
-        password: req.body.password
-      }); // all of this come from react form
+);
 
-      //access it via req.body.(whatever its called)
-      //w/ mongoose can use callback or promise (we use promise here)
-
-      //salt for hashing
-      bcrypt.genSalt(10, (err, salt) => {
-        //1st parameter: it will take in 10 char
-        //2nd parameter: callback function using arrow function (which takes an error if there is one & it will give us back that salt
-        //salt is used to create hash
-
-        //1st parameter newUser just created above
-        //2nd parameter  salt(generated above)
-        //3rd parameter callback gives an error if there is one, or if no error it gives us hash
-        //hash is whats stored in db (not actual password)
-        bcrypt.hash(newUser.password, salt, (err, hash) => {
-          if (err) throw err;
-          //set user password to the hash
-          newUser.password = hash;
-          newUser
-            .save()
-            //after new User gets saved the response is json of user info
-            .then(user => res.json(user))
-            .catch(err => console.log(err));
-        }); //closing of bcrypt.hash
-      }); //closing of bycrypt.genSalt
-    } //closing else
-  }); //closing of .then(user)
-}); //closing post register
-
-// @route   GET api/users/login
-// @desc    Login User, extract email & password, validate, Returning JWT Token
+// @route   GET api/profile/all
+// @desc    Get all profiles
 // @access  Public
-router.post("/login", (req, res) => {
-  //extraction of email & password from form sent in
-  const { errors, isValid } = validateLoginInput(req.body);
-  //include email name password in the body
-  //to check if there are errors, check to see if errors is valid(passed in parameter is false)
-  // Check Validation
-  if (!isValid) {
-    return res.status(400).json(errors); //send along the whole entire error's object
-  }
-  const email = req.body.email;
-  const password = req.body.password;
+router.get("/all", (req, res) => {
+  const errors = {};
 
-  //Find user by email
-  //User is a model
-  User.findOne({ email }) //will give a promise
-    //email shortened from email: email
-    //if user is found(match) -> give us the user as a promise
-    //if user doesn't match -> will user variable will be False
-    .then(user => {
-      if (!user) {
-        errors.email = "Users not found";
+  Profile.find()
+    .populate("user", ["name", "avatar"])
+    .then(profiles => {
+      if (!profiles) {
+        errors.noprofile = "There are no profiles";
         return res.status(404).json(errors);
       }
 
-      //validation of password
-      //bcrypt used to reverse the password hashed into text to compare w/ password from form sent in
-      //hashed password is from user (which was found in db)
-      bcrypt.compare(password, user.password).then(isMatch => {
-        //isMatch is a promised that shows if True if there there was a match
-        if (isMatch) {
-          //Instead of send back a response message
-          //res.json({ msg: "Success" });
-
-          //User Matched
-
-          const payload = { id: user.id, name: user.name, avatar: user.avatar }; //Create JWT payload
-
-          // Sign Token
-          //sign() takes in 3 arguments & a callback()
-          //1. payload: (what we want to include in the token) -> this is user info that will get decoded so that it can know what user it is
-          //2. keys.secret or key (located in config folder... changes to keys done here)
-          //3. expiration object: we know we need to send an expiration if we want it to expire at certain amt of time (in secs)
-
-          jwt.sign(
-            payload,
-            keys.secretOrKey,
-            { expiresIn: 3600 },
-            (err, token) => {
-              res.json({
-                success: true, //we should get token back if it was a successful login
-                token: "Bearer " + token //Bearer is a type of protocol to format the token in the header
-                //we're gonna attach that on to the token, so that we don't have to do it when we actually make the request
-              });
-            }
-          );
-        } else {
-          errors.password = "Password incorrect";
-          return res.status(400).json(errors);
-        }
-      });
-    });
+      res.json(profiles);
+    })
+    .catch(err => res.status(404).json({ profile: "There are no profiles" }));
 });
 
-// @route  GET api/users/current
-// @desc   Return current user (whoever token belongs to)
-// @access Private
-router.get(
-  "/current",
-  passport.authenticate("jwt", { session: false }), //callback contain req response
+// @route   GET api/profile/handle/:handle
+// @desc    Get profile by handle
+// @access  Public
+
+router.get("/handle/:handle", (req, res) => {
+  const errors = {};
+
+  Profile.findOne({ handle: req.params.handle })
+    .populate("user", ["name", "avatar"])
+    .then(profile => {
+      if (!profile) {
+        errors.noprofile = "There is no profile for this user";
+        res.status(404).json(errors);
+      }
+
+      res.json(profile);
+    })
+    .catch(err => res.status(404).json(err));
+});
+
+// @route   GET api/profile/user/:user_id (this is backend route)
+//Front end api route: api/profile/:user_id
+// @desc    Get profile by user ID (user_id)
+// @access  Public
+
+router.get("/user/:user_id", (req, res) => {
+  const errors = {};
+
+  //user is a key in the Profile model
+  Profile.findOne({ user: req.params.user_id })
+    .populate("user", ["name", "avatar"])
+    .then(profile => {
+      if (!profile) {
+        errors.noprofile = "There is no profile for this user";
+        res.status(404).json(errors);
+      }
+
+      res.json(profile);
+    })
+    .catch(err =>
+      res.status(404).json({ profile: "There is no profile for this user" })
+    );
+});
+
+// @route   POST api/profile
+// @desc    Create or edit user profile
+// @access  Private
+router.post(
+  "/",
+  passport.authenticate("jwt", { session: false }),
   (req, res) => {
-    //res.json({ msg: "Success" });
-    //user is in req.user
-    //res.json(req.user);
-    res.json({
-      id: req.user.id,
-      name: req.user.name,
-      email: req.user.email
+    //Validation of fields
+    const { errors, isValid } = validateProfileInput(req.body);
+    //all form fields available in req.body
+
+    // Check Validation
+    if (!isValid) {
+      // Return any errors with 400 status
+      return res.status(400).json(errors);
+    }
+
+    // Get fields
+    //all the info coming through the form will be stored as profileFields
+    const profileFields = {};
+    //profileFields: handle,company,website,location,status,skills,bio,twitter/facebook/youtube/instagram
+
+    //things that won't come from a form (comes from token)
+    //will include avatar, name, email
+    profileFields.user = req.user.id;
+
+    //check if the field that we're looking for has come in
+    //then assign it as propty of profileFields{}
+    if (req.body.handle) profileFields.handle = req.body.handle;
+    if (req.body.location) profileFields.location = req.body.location;
+    if (req.body.bio) profileFields.bio = req.body.bio;
+
+    Profile.findOne({ user: req.user.id }).then(profile => {
+      //If profile already exist -> Update with new fields coming in then it will respond with this profile
+      if (profile) {
+        // Update
+        //findOneAndUpdate()  -> method of mongoose
+        //profileField is a giant object we created from all the input
+        Profile.findOneAndUpdate(
+          { user: req.user.id }, //who we are updating
+          { $set: profileFields }, //object contain user info
+          { new: true }
+        ).then(profile => res.json(profile));
+      } else {
+        //If profile doesn't exist -> Create profile
+
+        //1st check to see if handle exists, bec we don't want multiple handles, handle is for SEO friendly way
+        //all our input should be in the profileFields object
+
+        // Check if handle exists
+        Profile.findOne({ handle: profileFields.handle }).then(profile => {
+          //If handle aready exist
+          if (profile) {
+            //handle is our profile page address
+            //if profile already exists
+            errors.handle = "That handle already exists";
+            res.status(400).json(errors);
+          }
+
+          //If handle does not exist -> Save Profile
+          new Profile(profileFields).save().then(profile => res.json(profile));
+        });
+      }
+    });
+  }
+);
+
+// @route   POST api/profile/experience
+// @desc    Add experience to profile
+// @access  Private
+router.post(
+  "/placesvisited",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    const { errors, isValid } = validateExperienceInput(req.body);
+
+    // Check Validation
+    if (!isValid) {
+      // Return any errors with 400 status
+      return res.status(400).json(errors);
+    }
+
+    //req.user.id comes from token
+    Profile.findOne({ user: req.user.id }).then(profile => {
+      //we dont' have an experience collection, so can't use save
+      //we need to add it to the experience array w/in Profile collection
+
+      const newPlace = {
+        //all these fields come from a form
+        country: req.body.country,
+        city: req.body.city,
+        attraction: req.body.attraction
+      };
+
+      // Add to exp array
+      //unshift() => add to beggining
+      //push() => add to end
+      profile.experience.unshift(newPlace);
+      //this will add new place you just been to
+      //front end application will update our state -> so we'll see that new experience
+      profile.save().then(profile => res.json(profile));
+    });
+  }
+);
+
+// @route   DELETE api/profile/experience/:exp_id
+// @desc    Delete experience from profile
+// @access  Private
+router.delete(
+  "/placesvisited/:place_id",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    //passing in the id of the particular experience to delete in the handle
+
+    Profile.findOne({ user: req.user.id })
+      .then(profile => {
+        //2 ways to do delete it
+        //1. maps(): map array to something else
+        //2. index out
+        //Get remove index ( find experience to delete )
+
+        // Get remove index
+        const removeIndex = profile.experience
+          .map(item => item.id)
+          //create a new array consisting of all the id of eperiences
+          .indexOf(req.params.exp_id);
+        //get us correct index of the experience(of the particular id) to delete
+
+        // Splice out of array
+        profile.placesvisited.splice(removeIndex, 1);
+
+        // Save
+        profile.save().then(profile => res.json(profile));
+      })
+      .catch(err => res.status(404).json(err));
+  }
+);
+
+// @route   DELETE api/profile
+// @desc    Delete user and profile
+// @access  Private
+router.delete(
+  "/",
+  passport.authenticate("jwt", { session: false }),
+  (req, res) => {
+    Profile.findOneAndRemove({ user: req.user.id }).then(() => {
+      User.findOneAndRemove({ _id: req.user.id }).then(() =>
+        res.json({ success: true })
+      );
     });
   }
 );
